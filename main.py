@@ -173,6 +173,22 @@ def _make_fence(content: str, lang: str = "") -> str:
     return f"{fence}{lang}\n{content}\n{fence}"
 
 
+def _to_callout(content: str, title: str = "Tool Result", callout_type: str = "note", collapsed: bool = True) -> str:
+    """Wrap *content* in an Obsidian foldable callout.
+
+    Obsidian uses blockquote-based callouts instead of HTML <details> tags.
+    Format:  > [!type]- Title
+             > content line 1
+             > content line 2
+    The '-' after the type makes it collapsed by default.
+    """
+    fold = "-" if collapsed else ""
+    header = f"> [!{callout_type}]{fold} {title}"
+    # Prefix every line of content with '> '
+    prefixed = "\n".join(f"> {line}" if line else ">" for line in content.split("\n"))
+    return f"{header}\n{prefixed}"
+
+
 def format_tool_use(content_block: dict) -> str:
     """Format a tool_use content block as Markdown."""
     name = content_block.get("name", "Unknown")
@@ -371,7 +387,7 @@ def convert_session(
                 if include_tool_results:
                     formatted = format_content(content)
                     if formatted.strip():
-                        lines.append(f"<details><summary>Tool Result</summary>\n\n{formatted}\n\n</details>\n")
+                        lines.append(_to_callout(formatted, "Tool Result") + "\n")
                 continue
 
             formatted = format_content(content)
@@ -421,17 +437,13 @@ def convert_session(
                         tid = block.get("id", "")
                         if tid in agent_tool_use_map:
                             aid = agent_tool_use_map[tid]
-                            lines.append(f"<details><summary>Subagent Conversation</summary>\n")
-                            lines.append(subagents[aid])
-                            lines.append("</details>\n")
+                            lines.append(_to_callout(subagents[aid], "Subagent Conversation", "abstract") + "\n")
                         else:
                             # Try to find by description match
                             desc = block.get("input", {}).get("description", "")
                             for aid, md in subagents.items():
                                 if desc and desc.lower() in md.lower() and aid not in agent_tool_use_map.values():
-                                    lines.append(f"<details><summary>Subagent Conversation</summary>\n")
-                                    lines.append(md)
-                                    lines.append("</details>\n")
+                                    lines.append(_to_callout(md, "Subagent Conversation", "abstract") + "\n")
                                     agent_tool_use_map[tid] = aid
                                     break
 
