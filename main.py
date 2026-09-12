@@ -180,7 +180,7 @@ def _make_fence(content: str, lang: str = "") -> str:
     return f"{fence}{lang}\n{content}\n{fence}"
 
 
-def _to_callout(content: str, title: str = "Tool Result", callout_type: str = "note", collapsed: bool = True) -> str:
+def _to_callout(content: str, title: str = "Command Result", callout_type: str = "note", collapsed: bool = True) -> str:
     """Wrap *content* in an Obsidian foldable callout.
 
     Obsidian uses blockquote-based callouts instead of HTML <details> tags.
@@ -418,7 +418,7 @@ def convert_session(
                 if include_tool_results:
                     formatted = format_content(content)
                     if formatted.strip():
-                        lines.append(_to_callout(formatted, "Tool Result") + "\n")
+                        lines.append(_to_callout(formatted, "Command Result") + "\n")
                 continue
 
             # Check string content for local CLI commands / caveats
