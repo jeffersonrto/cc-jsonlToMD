@@ -473,7 +473,8 @@ def convert_session(
                             if last_speaker == "user":
                                 lines.append("---\n")
                             last_speaker = "assistant"
-                            lines.append(f"{ASSISTANT_HEADER}\n\n{text}\n")
+                            callout_text = _to_callout(text, title="Message", callout_type="note", collapsed=False)
+                            lines.append(f"{ASSISTANT_HEADER}\n\n{callout_text}\n")
 
                     elif btype == "tool_use":
                         if last_speaker == "user":
@@ -525,7 +526,8 @@ def convert_session(
                     if last_speaker == "user":
                         lines.append("---\n")
                     last_speaker = "assistant"
-                    lines.append(f"{ASSISTANT_HEADER}\n\n{text}\n")
+                    callout_text = _to_callout(text, title="Message", callout_type="note", collapsed=False)
+                    lines.append(f"{ASSISTANT_HEADER}\n\n{callout_text}\n")
 
     return "\n".join(lines)
 
