@@ -54,50 +54,39 @@ class SessionInfo:
     title: str | None = None
     timestamp: str | None = None
     subagent_dir: Path | None = None
+    cwd: str | None = None
+    model: str | None = None
+    git_branch: str | None = None
 
     @property
     def display_project(self) -> str:
         """Human-readable project path.
 
-        Claude Code encodes project paths by replacing '/' with '-',
-        e.g. '/Users/nick/my-project' becomes '-Users-nick-my-project'.
-        We reverse this by splitting on the known leading pattern and
-        reconstructing path separators only where they originally were.
+        Prefers the exact cwd recorded in the session jsonl.
+        Falls back to path reconstruction if cwd is absent.
         """
-        # The encoded path starts with '-' (representing the leading '/')
-        # and uses '-' for every '/' in the original path. However, actual
-        # directory names may contain hyphens too. We can't perfectly reverse
-        # this, but we can use os.sep knowledge: the original path segments
-        # are valid directory names. We try to find the longest valid prefix.
+        if self.cwd:
+            return self.cwd
+
         raw = self.project_path
         if not raw:
             return raw
 
-        # Try to find the actual path on disk by checking ~/.claude/projects/
-        # Fall back to a heuristic: replace leading '-' with '/' and try to
-        # reconstruct by checking which splits produce real-looking paths.
-        # Best heuristic: the encoded form is the absolute path with '/' -> '-'
-        # and a leading '-'. Try to resolve by checking if the path exists.
         candidate = "/" + raw[1:] if raw.startswith("-") else raw
-        # Replace hyphens with '/' and check if it's a real path
         full_replace = candidate.replace("-", "/")
         if Path(full_replace).exists():
-            return full_replace.lstrip("/")
+            return full_replace
 
-        # Fallback: use a smarter reconstruction. Split by '-' and greedily
-        # rejoin segments that form existing directories.
         parts = raw.lstrip("-").split("-")
         reconstructed = [parts[0]]
         for part in parts[1:]:
-            # Try joining with the previous segment (hyphenated name)
             test_hyphen = "/" + "/".join(reconstructed[:-1] + [reconstructed[-1] + "-" + part])
-            test_slash = "/" + "/".join(reconstructed + [part])
             if Path(test_hyphen).exists():
                 reconstructed[-1] += "-" + part
             else:
                 reconstructed.append(part)
 
-        return "/".join(reconstructed)
+        return "/" + "/".join(reconstructed)
 
 
 def discover_sessions() -> list[SessionInfo]:
@@ -126,16 +115,22 @@ def discover_sessions() -> list[SessionInfo]:
             if subagent_dir.is_dir():
                 info.subagent_dir = subagent_dir
 
-            # Quick scan for title and first timestamp
+            # Quick scan for metadata
             try:
                 with open(jsonl_file) as f:
                     for line in f:
                         obj = json.loads(line)
-                        if obj.get("type") == "ai-title":
+                        if not info.title and obj.get("type") == "ai-title":
                             info.title = obj.get("aiTitle")
                         if not info.timestamp and obj.get("timestamp"):
                             info.timestamp = obj["timestamp"]
-                        if info.title and info.timestamp:
+                        if not info.cwd and obj.get("cwd"):
+                            info.cwd = obj["cwd"]
+                        if not info.git_branch and obj.get("gitBranch"):
+                            info.git_branch = obj["gitBranch"]
+                        if not info.model and obj.get("type") == "assistant":
+                            info.model = obj.get("message", {}).get("model")
+                        if info.title and info.timestamp and info.cwd and info.model and info.git_branch:
                             break
             except (json.JSONDecodeError, OSError):
                 pass
@@ -376,22 +371,53 @@ def convert_session(
     # Build output
     lines = []
 
-    # Header
+    # Ensure missing metadata is read from the session file
+    if not (session.title and session.timestamp and session.cwd and session.model and session.git_branch):
+        try:
+            with open(session.path) as f:
+                for line in f:
+                    obj = json.loads(line)
+                    if not session.title and obj.get("type") == "ai-title":
+                        session.title = obj.get("aiTitle")
+                    if not session.timestamp and obj.get("timestamp"):
+                        session.timestamp = obj["timestamp"]
+                    if not session.cwd and obj.get("cwd"):
+                        session.cwd = obj["cwd"]
+                    if not session.git_branch and obj.get("gitBranch"):
+                        session.git_branch = obj["gitBranch"]
+                    if not session.model and obj.get("type") == "assistant":
+                        session.model = obj.get("message", {}).get("model")
+                    if session.title and session.timestamp and session.cwd and session.model and session.git_branch:
+                        break
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # Header and metadata
     title = session.title or "Untitled Session"
     ts = session.timestamp or ""
     if ts:
         try:
             dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            ts = dt.strftime("%Y-%m-%d %H:%M UTC")
+            ts = dt.strftime("%Y-%m-%d %H:%M")
         except ValueError:
             pass
 
-    lines.append(f"# {title}")
-    lines.append("")
-    lines.append(f"**Session:** `{session.session_id}`  ")
-    lines.append(f"**Project:** `{session.display_project}`  ")
+    # YAML Frontmatter (Obsidian Properties)
+    lines.append("---")
+    lines.append(f'title: "{title}"')
+    lines.append(f'session: "{session.session_id}"')
+    lines.append(f'project: "{session.display_project}"')
     if ts:
-        lines.append(f"**Date:** {ts}  ")
+        lines.append(f'date: "{ts}"')
+    if session.model:
+        lines.append(f'model: "{session.model}"')
+    if session.git_branch:
+        lines.append(f'git_branch: "{session.git_branch}"')
+    lines.append("tags:")
+    lines.append("  - claude-code")
+    lines.append("---")
+    lines.append("")
+    lines.append(f"# {title}")
     lines.append("")
     lines.append("---")
     lines.append("")
