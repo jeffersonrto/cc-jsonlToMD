@@ -197,33 +197,44 @@ def _to_callout(content: str, title: str = "Tool Result", callout_type: str = "n
 
 
 def format_tool_use(content_block: dict) -> str:
-    """Format a tool_use content block as Markdown."""
+    """Format a tool_use content block as Markdown with a ### subheader."""
     name = content_block.get("name", "Unknown")
     inp = content_block.get("input", {})
 
-    lines = [f"**Tool: {name}**"]
+    lines = []
 
     if name == "Bash":
         cmd = inp.get("command", "")
         desc = inp.get("description", "")
-        if desc:
+        first_line = cmd.strip().splitlines()[0] if cmd.strip() else ""
+        if first_line and len(first_line) <= 60 and "\n" not in cmd.strip():
+            action = first_line
+        elif desc:
+            action = desc
+        elif first_line:
+            action = first_line[:60] + ("..." if len(first_line) > 60 else "")
+        else:
+            action = "run command"
+
+        lines.append(f"### Bash: {action}")
+        if desc and action != desc:
             lines.append(f"*{desc}*")
         lines.append(_make_fence(cmd, "bash"))
     elif name == "Read":
         fp = inp.get("file_path", "")
-        lines.append(f"Reading `{fp}`")
+        lines.append(f"### Read: `{fp}`" if fp else "### Read")
     elif name == "Write":
         fp = inp.get("file_path", "")
         content = inp.get("content", "")
-        lines.append(f"Writing `{fp}`")
+        lines.append(f"### Write: `{fp}`" if fp else "### Write")
         if content:
-            ext = Path(fp).suffix.lstrip(".")
+            ext = Path(fp).suffix.lstrip(".") if fp else ""
             lines.append(_make_fence(content, ext))
     elif name == "Edit":
         fp = inp.get("file_path", "")
         old = inp.get("old_string", "")
         new = inp.get("new_string", "")
-        lines.append(f"Editing `{fp}`")
+        lines.append(f"### Edit: `{fp}`" if fp else "### Edit")
         if old or new:
             diff_lines = []
             for ol in old.split("\n"):
@@ -234,26 +245,27 @@ def format_tool_use(content_block: dict) -> str:
     elif name == "Grep":
         pattern = inp.get("pattern", "")
         path = inp.get("path", ".")
-        lines.append(f"Searching for `{pattern}` in `{path}`")
+        lines.append(f"### Grep: `{pattern}` in `{path}`")
     elif name == "Glob":
         pattern = inp.get("pattern", "")
-        lines.append(f"Finding files matching `{pattern}`")
+        lines.append(f"### Glob: `{pattern}`")
     elif name == "Agent":
         desc = inp.get("description", "")
         subtype = inp.get("subagent_type", "general-purpose")
-        lines.append(f"Spawning **{subtype}** agent: *{desc}*")
+        lines.append(f"### Agent: **{subtype}** - *{desc}*")
         prompt = inp.get("prompt", "")
         if prompt:
             lines.append(f"\n> {prompt}")
     elif name in ("WebSearch", "WebFetch"):
         query = inp.get("query", inp.get("url", ""))
-        lines.append(f"`{query}`")
+        lines.append(f"### {name}: `{query}`")
     else:
         # Generic: show input as JSON
+        lines.append(f"### Tool: {name}")
         if inp:
             lines.append(_make_fence(json.dumps(inp, indent=2), "json"))
 
-    return "\n".join(lines)
+    return "\n\n".join(lines)
 
 
 def format_tool_result(content_block: dict) -> str:
@@ -436,60 +448,69 @@ def convert_session(
                 lines.append(f"{USER_HEADER}\n\n{_make_fence(formatted)}\n")
 
         elif role == "assistant":
-            formatted_parts = []
             if isinstance(content, list):
                 for block in content:
-                    if isinstance(block, dict) and block.get("type") == "tool_use":
-                        if block.get("name") == "Agent":
-                            # Map this tool_use to subagent output
-                            desc = block.get("input", {}).get("description", "")
-                            # Find matching subagent by description
-                            for aid, md in subagents.items():
-                                if desc and desc in md:
-                                    agent_tool_use_map[block["id"]] = aid
+                    if not isinstance(block, dict):
+                        continue
 
-                        formatted_parts.append(format_tool_use(block))
-                    elif isinstance(block, dict) and block.get("type") == "text":
-                        import re
-                        text = block["text"]
+                    btype = block.get("type")
+                    if btype == "text":
+                        text = block.get("text", "")
                         text = re.sub(r"<ide_opened_file>.*?</ide_opened_file>", "", text, flags=re.DOTALL)
                         text = re.sub(r"<system-reminder>.*?</system-reminder>", "", text, flags=re.DOTALL)
                         text = text.strip()
                         if text:
-                            formatted_parts.append(text)
-                    elif isinstance(block, dict) and block.get("type") == "tool_result":
+                            if last_speaker == "user":
+                                lines.append("---\n")
+                            last_speaker = "assistant"
+                            lines.append(f"{ASSISTANT_HEADER}\n\n{text}\n")
+
+                    elif btype == "tool_use":
+                        if last_speaker == "user":
+                            lines.append("---\n")
+                        last_speaker = "assistant"
+
+                        formatted_tool = format_tool_use(block)
+                        if formatted_tool.strip():
+                            lines.append(f"{formatted_tool}\n")
+
+                        # Insert subagent conversation after the Agent tool that spawned it
+                        if block.get("name") == "Agent":
+                            tid = block.get("id", "")
+                            desc = block.get("input", {}).get("description", "")
+                            sub_md = None
+                            if tid in agent_tool_use_map:
+                                sub_md = subagents[agent_tool_use_map[tid]]
+                            else:
+                                for aid, md in subagents.items():
+                                    if desc and desc in md:
+                                        agent_tool_use_map[block["id"]] = aid
+                                        sub_md = md
+                                        break
+                                if not sub_md:
+                                    for aid, md in subagents.items():
+                                        if desc and desc.lower() in md.lower() and aid not in agent_tool_use_map.values():
+                                            agent_tool_use_map[tid] = aid
+                                            sub_md = md
+                                            break
+                            if sub_md:
+                                lines.append(_to_callout(sub_md, "Subagent Conversation", "abstract") + "\n")
+
+                    elif btype == "tool_result":
                         if include_tool_results:
                             r = format_tool_result(block)
                             if r:
-                                formatted_parts.append(r)
+                                lines.append(f"{r}\n")
 
-            formatted = "\n\n".join(formatted_parts)
-            if formatted.strip():
-                if last_speaker == "user":
-                    lines.append("---\n")
-                last_speaker = "assistant"
-                lines.append(f"{ASSISTANT_HEADER}\n\n{formatted}\n")
-
-            # Insert subagent conversations after the assistant message that spawned them
-            if isinstance(content, list):
-                for block in content:
-                    if (
-                        isinstance(block, dict)
-                        and block.get("type") == "tool_use"
-                        and block.get("name") == "Agent"
-                    ):
-                        tid = block.get("id", "")
-                        if tid in agent_tool_use_map:
-                            aid = agent_tool_use_map[tid]
-                            lines.append(_to_callout(subagents[aid], "Subagent Conversation", "abstract") + "\n")
-                        else:
-                            # Try to find by description match
-                            desc = block.get("input", {}).get("description", "")
-                            for aid, md in subagents.items():
-                                if desc and desc.lower() in md.lower() and aid not in agent_tool_use_map.values():
-                                    lines.append(_to_callout(md, "Subagent Conversation", "abstract") + "\n")
-                                    agent_tool_use_map[tid] = aid
-                                    break
+            elif isinstance(content, str) and content.strip():
+                text = re.sub(r"<ide_opened_file>.*?</ide_opened_file>", "", content, flags=re.DOTALL)
+                text = re.sub(r"<system-reminder>.*?</system-reminder>", "", text, flags=re.DOTALL)
+                text = text.strip()
+                if text:
+                    if last_speaker == "user":
+                        lines.append("---\n")
+                    last_speaker = "assistant"
+                    lines.append(f"{ASSISTANT_HEADER}\n\n{text}\n")
 
     return "\n".join(lines)
 
