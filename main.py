@@ -379,6 +379,10 @@ def convert_session(
         content = msg.get("message", {}).get("content", [])
 
         if role == "user":
+            # Ignore synthetic meta messages or caveats
+            if msg.get("isMeta"):
+                continue
+
             # Check if this is a tool_result (not direct user input)
             if isinstance(content, list) and all(
                 isinstance(b, dict) and b.get("type") == "tool_result"
@@ -390,9 +394,32 @@ def convert_session(
                         lines.append(_to_callout(formatted, "Tool Result") + "\n")
                 continue
 
+            # Check string content for local CLI commands / caveats
+            if isinstance(content, str):
+                if "<local-command-caveat>" in content:
+                    continue
+
+                if "<command-name>" in content:
+                    m_name = re.search(r"<command-name>(.*?)</command-name>", content, re.DOTALL)
+                    m_args = re.search(r"<command-args>(.*?)</command-args>", content, re.DOTALL)
+                    name = m_name.group(1).strip() if m_name else ""
+                    args = m_args.group(1).strip() if m_args else ""
+                    cmd = f"{name} {args}".strip()
+                    if cmd:
+                        lines.append(f"## User\n\n{_make_fence(cmd)}\n")
+                    continue
+
+                if "<local-command-stdout>" in content:
+                    m_out = re.search(r"<local-command-stdout>(.*?)</local-command-stdout>", content, re.DOTALL)
+                    if m_out:
+                        stdout_text = m_out.group(1).strip()
+                        if stdout_text:
+                            lines.append(_to_callout(stdout_text, "Command Output") + "\n")
+                    continue
+
             formatted = format_content(content)
             if formatted.strip():
-                lines.append(f"## User\n\n{formatted}\n")
+                lines.append(f"## User\n\n{_make_fence(formatted)}\n")
 
         elif role == "assistant":
             formatted_parts = []
