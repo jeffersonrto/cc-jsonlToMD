@@ -66,7 +66,7 @@ python3 main.py --all --output-dir ./exports/
 
 - **User messages** → `## User` sections with code blocks
 - **Assistant messages** → `## Assistant` sections with highlighted `> [!note] Message` callouts
-- **Tool actions** → grouped under `### Ações` with `####` descriptive subheaders
+- **Tool actions** → grouped under `### Actions` with `####` descriptive subheaders
 - **Tool results** → collapsible Obsidian callouts (`> [!note]- Command Result`)
 - **Subagent conversations** → collapsible Obsidian callouts (`> [!abstract]- Subagent Conversation`)
 - **Code** → fenced code blocks with language hints and dynamic fences

@@ -409,10 +409,6 @@ def convert_session(
     lines.append(f'project: "{session.display_project}"')
     if ts:
         lines.append(f'date: "{ts}"')
-    if session.model:
-        lines.append(f'model: "{session.model}"')
-    if session.git_branch:
-        lines.append(f'git_branch: "{session.git_branch}"')
     lines.append("tags:")
     lines.append("  - claude-code")
     lines.append("---")
@@ -508,7 +504,7 @@ def convert_session(
                         last_speaker = "assistant"
 
                         if not in_actions_block:
-                            lines.append("### Ações\n")
+                            lines.append("### Actions\n")
                             in_actions_block = True
 
                         formatted_tool = format_tool_use(block)
