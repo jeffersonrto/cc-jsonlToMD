@@ -153,6 +153,26 @@ def parse_messages(jsonl_path: Path) -> list[dict]:
     return messages
 
 
+def _make_fence(content: str, lang: str = "") -> str:
+    """Wrap *content* in a fenced code block that won't break if the content
+    itself contains triple-backtick sequences.
+
+    Finds the longest run of consecutive backticks inside *content* and uses
+    a fence with one more backtick than that (minimum 3).
+    """
+    longest = 0
+    current = 0
+    for ch in content:
+        if ch == "`":
+            current += 1
+            if current > longest:
+                longest = current
+        else:
+            current = 0
+    fence = "`" * max(3, longest + 1)
+    return f"{fence}{lang}\n{content}\n{fence}"
+
+
 def format_tool_use(content_block: dict) -> str:
     """Format a tool_use content block as Markdown."""
     name = content_block.get("name", "Unknown")
@@ -165,7 +185,7 @@ def format_tool_use(content_block: dict) -> str:
         desc = inp.get("description", "")
         if desc:
             lines.append(f"*{desc}*")
-        lines.append(f"```bash\n{cmd}\n```")
+        lines.append(_make_fence(cmd, "bash"))
     elif name == "Read":
         fp = inp.get("file_path", "")
         lines.append(f"Reading `{fp}`")
@@ -175,19 +195,19 @@ def format_tool_use(content_block: dict) -> str:
         lines.append(f"Writing `{fp}`")
         if content:
             ext = Path(fp).suffix.lstrip(".")
-            lines.append(f"```{ext}\n{content}\n```")
+            lines.append(_make_fence(content, ext))
     elif name == "Edit":
         fp = inp.get("file_path", "")
         old = inp.get("old_string", "")
         new = inp.get("new_string", "")
         lines.append(f"Editing `{fp}`")
         if old or new:
-            lines.append("```diff")
+            diff_lines = []
             for ol in old.split("\n"):
-                lines.append(f"- {ol}")
+                diff_lines.append(f"- {ol}")
             for nl in new.split("\n"):
-                lines.append(f"+ {nl}")
-            lines.append("```")
+                diff_lines.append(f"+ {nl}")
+            lines.append(_make_fence("\n".join(diff_lines), "diff"))
     elif name == "Grep":
         pattern = inp.get("pattern", "")
         path = inp.get("path", ".")
@@ -208,7 +228,7 @@ def format_tool_use(content_block: dict) -> str:
     else:
         # Generic: show input as JSON
         if inp:
-            lines.append(f"```json\n{json.dumps(inp, indent=2)}\n```")
+            lines.append(_make_fence(json.dumps(inp, indent=2), "json"))
 
     return "\n".join(lines)
 
@@ -235,7 +255,7 @@ def format_tool_result(content_block: dict) -> str:
 
     prefix = "**Error:**\n" if is_error else ""
 
-    return f"{prefix}```\n{content}\n```"
+    return f"{prefix}{_make_fence(content)}"
 
 
 def format_content(content: list | str) -> str:
