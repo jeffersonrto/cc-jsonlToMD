@@ -6,19 +6,19 @@ readable Markdown — including subagent conversations.
 
 Usage:
     # List all sessions
-    claude-chat-to-md --list
+    python3 main.py --list
 
     # Convert a specific session (by UUID or partial match)
-    claude-chat-to-md 2354ca15
+    python3 main.py 2354ca15
 
     # Convert the most recent session for a project
-    claude-chat-to-md --latest --project myapp
+    python3 main.py --latest --project myapp
 
     # Convert all sessions
-    claude-chat-to-md --all
+    python3 main.py --all
 
     # Output to a specific file
-    claude-chat-to-md 2354ca15 -o chat.md
+    python3 main.py 2354ca15 -o chat.md
 """
 
 from __future__ import annotations

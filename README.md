@@ -4,32 +4,12 @@ Convert [Claude Code](https://docs.anthropic.com/en/docs/claude-code) chat sessi
 
 Claude Code persists full chat history as JSONL files under `~/.claude/projects/`. This tool reads those files and produces well-formatted Markdown with proper headings, code blocks, and collapsible sections for tool results and subagent conversations.
 
-## Install
-
-```bash
-pipx install claude-chat-to-md
-```
-
-Or with pip:
-
-```bash
-pip install claude-chat-to-md
-```
-
-Or run directly from source:
-
-```bash
-git clone https://github.com/luckynick/claude-chat-to-md.git
-cd claude-chat-to-md
-pip install -e .
-```
-
 ## Usage
 
 ### List sessions
 
 ```bash
-claude-chat-to-md --list
+python3 main.py --list
 ```
 
 ```
@@ -44,29 +24,29 @@ claude-chat-to-md --list
 
 ```bash
 # By index (from --list)
-claude-chat-to-md 1 -o chat.md
+python3 main.py 1 -o chat.md
 
 # By UUID prefix
-claude-chat-to-md a1b2c3 -o chat.md
+python3 main.py a1b2c3 -o chat.md
 
 # By title substring
-claude-chat-to-md "auth middleware" -o chat.md
+python3 main.py "auth middleware" -o chat.md
 
 # Most recent session
-claude-chat-to-md --latest -o chat.md
+python3 main.py --latest -o chat.md
 ```
 
 ### Filter by project
 
 ```bash
-claude-chat-to-md --list --project myapp
-claude-chat-to-md --latest --project myapp -o chat.md
+python3 main.py --list --project myapp
+python3 main.py --latest --project myapp -o chat.md
 ```
 
 ### Export all sessions
 
 ```bash
-claude-chat-to-md --all --output-dir ./exports/
+python3 main.py --all --output-dir ./exports/
 ```
 
 ### Options
@@ -84,13 +64,14 @@ claude-chat-to-md --all --output-dir ./exports/
 
 ## Output format
 
-- **User messages** → `## User` sections
-- **Assistant messages** → `## Assistant` sections with text and tool calls
-- **Tool results** → collapsible `<details>` blocks
-- **Subagent conversations** → collapsible `<details>` blocks with full prompt/response
-- **Code** → fenced code blocks with language hints
+- **User messages** → `## User` sections with code blocks
+- **Assistant messages** → `## Assistant` sections with highlighted `> [!note] Message` callouts
+- **Tool actions** → grouped under `### Ações` with `####` descriptive subheaders
+- **Tool results** → collapsible Obsidian callouts (`> [!note]- Command Result`)
+- **Subagent conversations** → collapsible Obsidian callouts (`> [!abstract]- Subagent Conversation`)
+- **Code** → fenced code blocks with language hints and dynamic fences
 - **Diffs** → displayed as unified diff format
-- System tags (`<ide_opened_file>`, `<system-reminder>`) are stripped
+- System tags (`<ide_opened_file>`, `<system-reminder>`, `<local-command-caveat>`) are stripped
 
 ## How it works
 
