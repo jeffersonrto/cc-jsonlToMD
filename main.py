@@ -174,16 +174,8 @@ def format_tool_use(content_block: dict) -> str:
         content = inp.get("content", "")
         lines.append(f"Writing `{fp}`")
         if content:
-            # Show first/last lines for long files
-            content_lines = content.split("\n")
-            if len(content_lines) > 30:
-                preview = "\n".join(content_lines[:15])
-                preview += f"\n\n... ({len(content_lines) - 30} lines omitted) ...\n\n"
-                preview += "\n".join(content_lines[-15:])
-            else:
-                preview = content
             ext = Path(fp).suffix.lstrip(".")
-            lines.append(f"```{ext}\n{preview}\n```")
+            lines.append(f"```{ext}\n{content}\n```")
     elif name == "Edit":
         fp = inp.get("file_path", "")
         old = inp.get("old_string", "")
@@ -209,9 +201,6 @@ def format_tool_use(content_block: dict) -> str:
         lines.append(f"Spawning **{subtype}** agent: *{desc}*")
         prompt = inp.get("prompt", "")
         if prompt:
-            # Truncate long prompts
-            if len(prompt) > 500:
-                prompt = prompt[:500] + "..."
             lines.append(f"\n> {prompt}")
     elif name in ("WebSearch", "WebFetch"):
         query = inp.get("query", inp.get("url", ""))
@@ -219,7 +208,7 @@ def format_tool_use(content_block: dict) -> str:
     else:
         # Generic: show input as JSON
         if inp:
-            lines.append(f"```json\n{json.dumps(inp, indent=2)[:500]}\n```")
+            lines.append(f"```json\n{json.dumps(inp, indent=2)}\n```")
 
     return "\n".join(lines)
 
@@ -245,12 +234,6 @@ def format_tool_result(content_block: dict) -> str:
         return ""
 
     prefix = "**Error:**\n" if is_error else ""
-    # Truncate very long results
-    lines = content.split("\n")
-    if len(lines) > 50:
-        content = "\n".join(lines[:25])
-        content += f"\n\n... ({len(lines) - 50} lines omitted) ...\n\n"
-        content += "\n".join(lines[-25:])
 
     return f"{prefix}```\n{content}\n```"
 
