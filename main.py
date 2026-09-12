@@ -380,6 +380,7 @@ def convert_session(
 
     # Track which agent tool_use_ids map to which subagent
     agent_tool_use_map: dict[str, str] = {}
+    last_speaker: str | None = None
 
     for msg in messages:
         role = msg.get("type", "")
@@ -413,6 +414,9 @@ def convert_session(
                     args = m_args.group(1).strip() if m_args else ""
                     cmd = f"{name} {args}".strip()
                     if cmd:
+                        if last_speaker == "assistant":
+                            lines.append("---\n")
+                        last_speaker = "user"
                         lines.append(f"{USER_HEADER}\n\n{_make_fence(cmd)}\n")
                     continue
 
@@ -426,6 +430,9 @@ def convert_session(
 
             formatted = format_content(content)
             if formatted.strip():
+                if last_speaker == "assistant":
+                    lines.append("---\n")
+                last_speaker = "user"
                 lines.append(f"{USER_HEADER}\n\n{_make_fence(formatted)}\n")
 
         elif role == "assistant":
@@ -458,6 +465,9 @@ def convert_session(
 
             formatted = "\n\n".join(formatted_parts)
             if formatted.strip():
+                if last_speaker == "user":
+                    lines.append("---\n")
+                last_speaker = "assistant"
                 lines.append(f"{ASSISTANT_HEADER}\n\n{formatted}\n")
 
             # Insert subagent conversations after the assistant message that spawned them
