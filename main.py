@@ -197,7 +197,7 @@ def _to_callout(content: str, title: str = "Tool Result", callout_type: str = "n
 
 
 def format_tool_use(content_block: dict) -> str:
-    """Format a tool_use content block as Markdown with a descriptive ### subheader."""
+    """Format a tool_use content block as Markdown with a descriptive #### subheader."""
     name = content_block.get("name", "Unknown")
     inp = content_block.get("input", {})
 
@@ -210,18 +210,18 @@ def format_tool_use(content_block: dict) -> str:
 
         # Use description as subheader if available, otherwise the command
         title = desc if desc else (first_line[:80] if first_line else "Run command")
-        lines.append(f"### {title}")
+        lines.append(f"#### {title}")
         if cmd:
             lines.append(_make_fence(cmd, "bash"))
 
     elif name == "Read":
         fp = inp.get("file_path", "")
-        lines.append(f"### Read `{fp}`" if fp else "### Read file")
+        lines.append(f"#### Read `{fp}`" if fp else "#### Read file")
 
     elif name == "Write":
         fp = inp.get("file_path", "")
         content = inp.get("content", "")
-        lines.append(f"### Write `{fp}`" if fp else "### Write file")
+        lines.append(f"#### Write `{fp}`" if fp else "#### Write file")
         if content:
             ext = Path(fp).suffix.lstrip(".") if fp else ""
             lines.append(_make_fence(content, ext))
@@ -230,7 +230,7 @@ def format_tool_use(content_block: dict) -> str:
         fp = inp.get("file_path", "")
         old = inp.get("old_string", "")
         new = inp.get("new_string", "")
-        lines.append(f"### Edit `{fp}`" if fp else "### Edit file")
+        lines.append(f"#### Edit `{fp}`" if fp else "#### Edit file")
         if old or new:
             diff_lines = []
             for ol in old.split("\n"):
@@ -242,32 +242,32 @@ def format_tool_use(content_block: dict) -> str:
     elif name == "Grep":
         pattern = inp.get("pattern", "")
         path = inp.get("path", ".")
-        lines.append(f"### Search for `{pattern}` in `{path}`")
+        lines.append(f"#### Search for `{pattern}` in `{path}`")
 
     elif name == "Glob":
         pattern = inp.get("pattern", "")
-        lines.append(f"### Find files matching `{pattern}`")
+        lines.append(f"#### Find files matching `{pattern}`")
 
     elif name == "Agent":
         desc = inp.get("description", "")
         subtype = inp.get("subagent_type", "general-purpose")
         title = desc if desc else f"Spawn {subtype} agent"
-        lines.append(f"### {title}")
+        lines.append(f"#### {title}")
         prompt = inp.get("prompt", "")
         if prompt:
             lines.append(f"\n> {prompt}")
 
     elif name == "WebSearch":
         query = inp.get("query", "")
-        lines.append(f"### Search web for `{query}`")
+        lines.append(f"#### Search web for `{query}`")
 
     elif name == "WebFetch":
         url = inp.get("url", "")
-        lines.append(f"### Fetch `{url}`")
+        lines.append(f"#### Fetch `{url}`")
 
     else:
         # Generic: show input as JSON
-        lines.append(f"### Tool: {name}")
+        lines.append(f"#### Tool: {name}")
         if inp:
             lines.append(_make_fence(json.dumps(inp, indent=2), "json"))
 
@@ -399,6 +399,7 @@ def convert_session(
     # Track which agent tool_use_ids map to which subagent
     agent_tool_use_map: dict[str, str] = {}
     last_speaker: str | None = None
+    in_actions_block = False
 
     for msg in messages:
         role = msg.get("type", "")
@@ -432,6 +433,7 @@ def convert_session(
                     args = m_args.group(1).strip() if m_args else ""
                     cmd = f"{name} {args}".strip()
                     if cmd:
+                        in_actions_block = False
                         if last_speaker == "assistant":
                             lines.append("---\n")
                         last_speaker = "user"
@@ -448,6 +450,7 @@ def convert_session(
 
             formatted = format_content(content)
             if formatted.strip():
+                in_actions_block = False
                 if last_speaker == "assistant":
                     lines.append("---\n")
                 last_speaker = "user"
@@ -466,6 +469,7 @@ def convert_session(
                         text = re.sub(r"<system-reminder>.*?</system-reminder>", "", text, flags=re.DOTALL)
                         text = text.strip()
                         if text:
+                            in_actions_block = False
                             if last_speaker == "user":
                                 lines.append("---\n")
                             last_speaker = "assistant"
@@ -475,6 +479,10 @@ def convert_session(
                         if last_speaker == "user":
                             lines.append("---\n")
                         last_speaker = "assistant"
+
+                        if not in_actions_block:
+                            lines.append("### Ações\n")
+                            in_actions_block = True
 
                         formatted_tool = format_tool_use(block)
                         if formatted_tool.strip():
@@ -513,6 +521,7 @@ def convert_session(
                 text = re.sub(r"<system-reminder>.*?</system-reminder>", "", text, flags=re.DOTALL)
                 text = text.strip()
                 if text:
+                    in_actions_block = False
                     if last_speaker == "user":
                         lines.append("---\n")
                     last_speaker = "assistant"
