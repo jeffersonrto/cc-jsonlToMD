@@ -36,6 +36,13 @@ from typing import TextIO
 CLAUDE_DIR = Path.home() / ".claude"
 PROJECTS_DIR = CLAUDE_DIR / "projects"
 
+# Header colors for Markdown / Obsidian
+USER_COLOR = "#3b82f6"       # Blue
+ASSISTANT_COLOR = "#a855f7"  # Purple / Claude
+
+USER_HEADER = f'## <span style="color: {USER_COLOR};">User</span>'
+ASSISTANT_HEADER = f'## <span style="color: {ASSISTANT_COLOR};">Assistant</span>'
+
 
 @dataclass
 class SessionInfo:
@@ -406,7 +413,7 @@ def convert_session(
                     args = m_args.group(1).strip() if m_args else ""
                     cmd = f"{name} {args}".strip()
                     if cmd:
-                        lines.append(f"## User\n\n{_make_fence(cmd)}\n")
+                        lines.append(f"{USER_HEADER}\n\n{_make_fence(cmd)}\n")
                     continue
 
                 if "<local-command-stdout>" in content:
@@ -419,7 +426,7 @@ def convert_session(
 
             formatted = format_content(content)
             if formatted.strip():
-                lines.append(f"## User\n\n{_make_fence(formatted)}\n")
+                lines.append(f"{USER_HEADER}\n\n{_make_fence(formatted)}\n")
 
         elif role == "assistant":
             formatted_parts = []
@@ -451,7 +458,7 @@ def convert_session(
 
             formatted = "\n\n".join(formatted_parts)
             if formatted.strip():
-                lines.append(f"## Assistant\n\n{formatted}\n")
+                lines.append(f"{ASSISTANT_HEADER}\n\n{formatted}\n")
 
             # Insert subagent conversations after the assistant message that spawned them
             if isinstance(content, list):
