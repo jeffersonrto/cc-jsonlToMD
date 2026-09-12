@@ -197,7 +197,7 @@ def _to_callout(content: str, title: str = "Tool Result", callout_type: str = "n
 
 
 def format_tool_use(content_block: dict) -> str:
-    """Format a tool_use content block as Markdown with a ### subheader."""
+    """Format a tool_use content block as Markdown with a descriptive ### subheader."""
     name = content_block.get("name", "Unknown")
     inp = content_block.get("input", {})
 
@@ -207,34 +207,30 @@ def format_tool_use(content_block: dict) -> str:
         cmd = inp.get("command", "")
         desc = inp.get("description", "")
         first_line = cmd.strip().splitlines()[0] if cmd.strip() else ""
-        if first_line and len(first_line) <= 60 and "\n" not in cmd.strip():
-            action = first_line
-        elif desc:
-            action = desc
-        elif first_line:
-            action = first_line[:60] + ("..." if len(first_line) > 60 else "")
-        else:
-            action = "run command"
 
-        lines.append(f"### Bash: {action}")
-        if desc and action != desc:
-            lines.append(f"*{desc}*")
-        lines.append(_make_fence(cmd, "bash"))
+        # Use description as subheader if available, otherwise the command
+        title = desc if desc else (first_line[:80] if first_line else "Run command")
+        lines.append(f"### {title}")
+        if cmd:
+            lines.append(_make_fence(cmd, "bash"))
+
     elif name == "Read":
         fp = inp.get("file_path", "")
-        lines.append(f"### Read: `{fp}`" if fp else "### Read")
+        lines.append(f"### Read `{fp}`" if fp else "### Read file")
+
     elif name == "Write":
         fp = inp.get("file_path", "")
         content = inp.get("content", "")
-        lines.append(f"### Write: `{fp}`" if fp else "### Write")
+        lines.append(f"### Write `{fp}`" if fp else "### Write file")
         if content:
             ext = Path(fp).suffix.lstrip(".") if fp else ""
             lines.append(_make_fence(content, ext))
+
     elif name == "Edit":
         fp = inp.get("file_path", "")
         old = inp.get("old_string", "")
         new = inp.get("new_string", "")
-        lines.append(f"### Edit: `{fp}`" if fp else "### Edit")
+        lines.append(f"### Edit `{fp}`" if fp else "### Edit file")
         if old or new:
             diff_lines = []
             for ol in old.split("\n"):
@@ -242,23 +238,33 @@ def format_tool_use(content_block: dict) -> str:
             for nl in new.split("\n"):
                 diff_lines.append(f"+ {nl}")
             lines.append(_make_fence("\n".join(diff_lines), "diff"))
+
     elif name == "Grep":
         pattern = inp.get("pattern", "")
         path = inp.get("path", ".")
-        lines.append(f"### Grep: `{pattern}` in `{path}`")
+        lines.append(f"### Search for `{pattern}` in `{path}`")
+
     elif name == "Glob":
         pattern = inp.get("pattern", "")
-        lines.append(f"### Glob: `{pattern}`")
+        lines.append(f"### Find files matching `{pattern}`")
+
     elif name == "Agent":
         desc = inp.get("description", "")
         subtype = inp.get("subagent_type", "general-purpose")
-        lines.append(f"### Agent: **{subtype}** - *{desc}*")
+        title = desc if desc else f"Spawn {subtype} agent"
+        lines.append(f"### {title}")
         prompt = inp.get("prompt", "")
         if prompt:
             lines.append(f"\n> {prompt}")
-    elif name in ("WebSearch", "WebFetch"):
-        query = inp.get("query", inp.get("url", ""))
-        lines.append(f"### {name}: `{query}`")
+
+    elif name == "WebSearch":
+        query = inp.get("query", "")
+        lines.append(f"### Search web for `{query}`")
+
+    elif name == "WebFetch":
+        url = inp.get("url", "")
+        lines.append(f"### Fetch `{url}`")
+
     else:
         # Generic: show input as JSON
         lines.append(f"### Tool: {name}")
